@@ -13,7 +13,7 @@ const __dirname = path.dirname(__filename);
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "../frontend")));
 
-const API_KEY = "AIzaSyA3YVQqd46IB-9MXv2R0MjON7XvK5326JU";
+const API_KEY = "API";
 
 app.post("/chat", async (req, res) => {
     const userMessage = req.body.message;
