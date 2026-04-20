@@ -13,7 +13,7 @@ const __dirname = path.dirname(__filename);
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "../frontend")));
 
-const API_KEY = "AIzaSyCL3YA_FhK-vEkJRwoEV1vcC9pGSwa6a2k";
+const API_KEY = "AIzaSyA3YVQqd46IB-9MXv2R0MjON7XvK5326JU";
 
 app.post("/chat", async (req, res) => {
     const userMessage = req.body.message;
@@ -41,6 +41,7 @@ User: ${userMessage}
         );
 
         const data = await response.json();
+        console.log("Raw Gemini API response:", JSON.stringify(data, null, 2));
 
         const reply =
             data.candidates?.[0]?.content?.parts?.[0]?.text ||
@@ -53,4 +54,5 @@ User: ${userMessage}
     }
 });
 
-app.listen(3000, () => console.log("Server running on port 3000"));
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
