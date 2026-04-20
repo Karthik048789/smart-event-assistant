@@ -1,24 +1,50 @@
 import express from "express";
 import cors from "cors";
-import fetch from "node-fetch";
-
-const app = express();
-app.use(cors());
 import path from "path";
 import { fileURLToPath } from "url";
+import dotenv from "dotenv";
+import helmet from "helmet";
+import compression from "compression";
+import rateLimit from "express-rate-limit";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const app = express();
+
+// SECURITY: Helmet helps secure Express apps by setting various HTTP headers.
+app.use(helmet({
+    contentSecurityPolicy: false, // Disabling to avoid inline script issues on frontend simplicity
+}));
+
+// EFFICIENCY: Compress HTTP responses to save bandwidth.
+app.use(compression());
+app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "../frontend")));
 
-const API_KEY = "API";
+// SECURITY / EFFICIENCY: Rate Limiting to prevent spam/abuse
+const limiter = rateLimit({
+    windowMs: 1 * 60 * 1000, // 1 minute
+    max: 25, // limit each IP to 25 requests per windowMs
+    message: { reply: "Too many requests, please try again in a minute." }
+});
 
-app.post("/chat", async (req, res) => {
-    const userMessage = req.body.message;
+// GOOGLE SERVICES: Official Google Generative AI SDK connection
+const genAI = new GoogleGenerativeAI(process.env.API_KEY || "dummy_key");
 
-    const prompt = `
+app.post("/chat", limiter, async (req, res) => {
+    try {
+        const userMessage = req.body.message;
+        
+        if (!userMessage) {
+            return res.status(400).json({ reply: "Please provide a message." });
+        }
+
+        const prompt = `
 You are a Smart Event Assistant.
 Help users with:
 - Event recommendations
@@ -27,32 +53,23 @@ Help users with:
 
 User: ${userMessage}
 `;
-
-    try {
-        const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${API_KEY}`,
-            {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: prompt }] }]
-                })
-            }
-        );
-
-        const data = await response.json();
-        console.log("Raw Gemini API response:", JSON.stringify(data, null, 2));
-
-        const reply =
-            data.candidates?.[0]?.content?.parts?.[0]?.text ||
-            "Sorry, I couldn't understand.";
-
+        // Utilize gemini model via SDK
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+        const result = await model.generateContent(prompt);
+        const reply = result.response.text();
+        
         res.json({ reply });
 
     } catch (error) {
-        res.json({ reply: "Error connecting to AI." });
+        console.error("AI Assistant Error:", error);
+        res.status(500).json({ reply: "Error processing the AI request due to an internal failure or API limit." });
     }
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// We export the app for testing purposes
+export default app;
+
+if (process.env.NODE_ENV !== 'test') {
+    app.listen(PORT, () => console.log(`Server running on port ${PORT} with enhanced security and performance.`));
+}
